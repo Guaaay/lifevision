@@ -1,6 +1,6 @@
 #include <opencv2/opencv.hpp>
 
-#define DECAY_RATE 10
+#define DECAY_RATE 4
 
 uchar kill(uchar pixel){
     pixel = 0;
