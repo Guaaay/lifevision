@@ -1,6 +1,23 @@
 #include <opencv2/opencv.hpp>
+#include <map>
+#include <string>
 
 #define DECAY_RATE 4
+int decay_rate = DECAY_RATE;  // Global variable for trackbar position
+int thresh = 128;
+
+#define EDGES 0
+#define FILL 1
+#define FILL_INV 2
+
+int mode = EDGES;
+
+std::map<int,std::string> modeText = {
+    {EDGES, "EDGES"},
+    {FILL, "FILL"},
+    {FILL_INV, "FILL_INV"}
+};
+
 
 uchar kill(uchar pixel){
     pixel = 0;
@@ -39,7 +56,7 @@ cv::Mat GoL(cv::Mat input, int iters){
                         pixel = kill(pixel);
                     }
                     else{
-                        pixel -= DECAY_RATE;
+                        pixel -= decay_rate;
                     }
                 }
                 else{
@@ -53,6 +70,17 @@ cv::Mat GoL(cv::Mat input, int iters){
     return input;
 }
 
+void on_trackbar1(int, void*) {
+
+}
+void on_trackbar2(int, void*) {
+
+}
+
+void on_button_click(int, void*) {
+    std::cout << "BOTON" << std::endl;
+}
+
 int main() {
     cv::VideoCapture cap(0);
     if (!cap.isOpened()) {
@@ -61,14 +89,20 @@ int main() {
     }
     bool first = true;
 
+    cv::namedWindow("Webcam");
+
+    // Create a trackbar (slider)
+    cv::createTrackbar("Decay rate", "Webcam", &decay_rate, 20, on_trackbar1);
+    cv::createTrackbar("Threshold", "Webcam", &thresh, 255, on_trackbar2);
+
     cv::Mat frame, gray, binary, old_frame, edges, thick_edges, dst;
     cap >> frame;
-    double scale_factor = 1;  // Scaling down to 25%
+    double scale_factor = 0.75;  // Scaling down to 25%
     cv::resize(frame, frame, cv::Size(), scale_factor, scale_factor);
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
     cv::Laplacian(gray, edges, CV_16S, 3);
     cv::convertScaleAbs(edges, edges);
-    cv::threshold(gray, old_frame, 156, 255, cv::THRESH_BINARY_INV);
+    cv::threshold(gray, old_frame, thresh, 255, cv::THRESH_BINARY_INV);
 
     while (true) {
         cap >> frame;
@@ -76,17 +110,32 @@ int main() {
         if (frame.empty()) {
             break;
         }
+        
 
         cv::resize(frame, frame, cv::Size(), scale_factor, scale_factor);
         cv::flip(frame, dst, 1);
         cv::cvtColor(dst, gray, cv::COLOR_BGR2GRAY);
-        cv::Canny(gray, edges, 100, 200);
-        //cv::convertScaleAbs(edges, edges);
+        if(mode == EDGES){
+            cv::Canny(gray, edges, 100, 200);
+            cv::threshold(edges, binary, 1, 255, cv::THRESH_BINARY);
+        }
+        else if(mode==FILL){
+            cv::threshold(gray, binary, thresh, 255, cv::THRESH_BINARY_INV);
+        }
+        else if(mode==FILL_INV){
+            cv::threshold(gray, binary, thresh, 255, cv::THRESH_BINARY);
 
-        cv::threshold(edges, binary, 1, 255, cv::THRESH_BINARY);
+        }
+        
         cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1, 1));
-
         cv::dilate(binary, thick_edges, kernel);
+        cv::putText(thick_edges, //target image
+            modeText[mode], //text
+            cv::Point(20, thick_edges.rows - 20), //top-left position
+            cv::FONT_HERSHEY_DUPLEX,
+            3.0,
+            255,
+            6);
         //cv::bitwise_not(thick_edges, thick_edges); 
         cv::Mat combined;
         
@@ -109,7 +158,16 @@ int main() {
         }
 
         //cv::imshow("Webcam", old_frame);
-        if (cv::waitKey(10) >= 0) break; 
+        int q = cv::waitKey(10);
+        if(q == 27){
+            break;
+        }
+        if((char)q == ' '){
+            mode = (mode+1)%3;
+        }
+        else if(q>0){
+            break;
+        }
     }
 
     cap.release(); 
